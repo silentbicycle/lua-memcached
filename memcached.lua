@@ -39,26 +39,31 @@ local assert, print, setmetatable, type, tonumber, tostring =
    assert, print, setmetatable, type, tonumber, tostring
 
 
---- Non-blocking Lua client for memcached.
+---Non-blocking Lua client for memcached.
 module("memcached")
 
 local fmt = string.format
-local M = {}
+local Memcached = {}
 
 
----Connect to a memcached server.
+---Connect to a memcached server, returning a Memcached handle.
+-- @param host Defaults to localhost.
+-- @param port Defaults to 11211.
+-- @param defer_hook An optional function, called to defer, enabling
+-- non-blocking operation.
 function connect(host, port, defer_hook)
    host, port = host or "localhost", port or 11211
 
    local m = setmetatable({ _host=host, _port=port,
                             _defer = defer_hook},
-                       {__index=M})
+                       {__index = Memcached })
    m:connect()
    return m
 end
 
 
-function M:connect()
+---(Re-)Connect to the memcached server.
+function Memcached:connect()
    local conn, err = socket.connect(self._host, self._port)
    if not conn then return false, err end
    if self._defer then conn:settimeout(0) end
@@ -70,7 +75,7 @@ end
 local function init_con(self)
    local sock = self._s
    if not sock then
-      sock, err = M:connect()
+      sock, err = Memcached:connect()
    end
    if not sock then return false, err end
    return sock
@@ -78,7 +83,7 @@ end
 
 
 ---Send a command, asynchronously.
-function M:send(msg)
+function Memcached:send(msg)
    trace("MSG: ", msg:sub(1, -3))
    local sock, err = init_con(self)
    if not sock then return false, err end
@@ -98,7 +103,7 @@ end
 
 
 ---Read a response (a line of text, or spec bytes), asynchronously.
-function M:receive(spec)
+function Memcached:receive(spec)
    local sock, err = init_con(self)
    if not sock then return false, err end
    if self:is_async() then
@@ -120,8 +125,8 @@ function M:receive(spec)
 end
 
 
----Send a command and return the response or false, (error).
-function M:send_recv(msg)
+---Send a command and return the response or (false, error).
+function Memcached:send_recv(msg)
    local res, err = self:send(msg)
    if not res then return false, err end
    res, err = self:receive()
@@ -131,11 +136,11 @@ end
 
 
 ---Call the defer hook, if any.
-function M:defer() self._defer() end
+function Memcached:defer() self._defer() end
 
 
 ---Is the connection running asynchronously?
-function M:is_async() return self._defer ~= nil end
+function Memcached:is_async() return self._defer ~= nil end
 
 
 --====================
@@ -143,7 +148,7 @@ function M:is_async() return self._defer ~= nil end
 --====================
 
 local function store_cmd(self, cmd, key, data, exptime,
-                         flags, noreply, cas_unique)
+                         flags, noreply, cas_id)
    
    if type(data) == "number" then data = tostring(data) end
    if not key then return false, "no key"
@@ -154,7 +159,7 @@ local function store_cmd(self, cmd, key, data, exptime,
    local buf = { cmd, " ", key, " ",
                  flags or 0, " ", exptime or 0, " ",
                  data:len() }
-   if cas_unique then buf[#buf+1] = " " .. cas_unique end
+   if cas_id then buf[#buf+1] = " " .. cas_id end
    if noreply then buf[#buf+1] = " noreply" end
    buf[#buf+1] = "\r\n"
    buf[#buf+1] = data
@@ -164,39 +169,53 @@ local function store_cmd(self, cmd, key, data, exptime,
 end
 
 
----Set
-function M:set(key, data, exptime, flags, noreply)
+---Set a key to a value.
+-- @param key A key, which cannot have whitespace or control characters
+-- and must be less than 250 chars long.
+-- @param data Value to associate with the key. Must be under 1 megabyte.
+-- @param exptime Optional expiration time, in seconds.
+-- @param flags Optional 16-bit int to associate with the key,
+-- for bit flags.
+-- @param noreply Do not expect a reply, just set it.
+function Memcached:set(key, data, exptime, flags, noreply)
    return store_cmd(self, "set", key, data, exptime, flags, noreply)
 end
 
 
----Add
-function M:add(key, data, exptime, flags, noreply)
+---Add a value to a non-existing key.
+-- @see set
+function Memcached:add(key, data, exptime, flags, noreply)
    return store_cmd(self, "add", key, data, exptime, flags, noreply)
 end
 
 
----Replace
-function M:replace(key, data, exptime, flags, noreply)
+---Replace a key's value.
+-- @see set
+function Memcached:replace(key, data, exptime, flags, noreply)
    return store_cmd(self, "replace", key, data, exptime, flags, noreply)
 end
 
 
----Append
-function M:append(key, data, exptime, flags, noreply)
+---Append to a key's value.
+-- @see set
+function Memcached:append(key, data, exptime, flags, noreply)
    return store_cmd(self, "append", key, data, exptime, flags, noreply)
 end
 
 
----Prepend
-function M:prepend(key, data, exptime, flags, noreply)
+---Prepend to a key's value.
+-- @see set
+function Memcached:prepend(key, data, exptime, flags, noreply)
    return store_cmd(self, "prepend", key, data, exptime, flags, noreply)
 end
 
 
-function M:cas(key, data, cas_unique, flags, exptime, noreply)
+---Modify a key's value if the cas ID (from gets) is still current.
+-- @see gets
+-- @see set
+function Memcached:cas(key, data, cas_id, flags, exptime, noreply)
    return store_cmd(self, "cas", key, data,
-                    exptime, flags, noreply, cas_unique)
+                    exptime, flags, noreply, cas_id)
 end
 
 
@@ -228,13 +247,18 @@ local function do_get(self, cmd, keys, pattern)
 end
 
 
----Get.
-function M:get(keys)
+---Get value and flags for one or more keys.
+-- @param keys Key or {"list", "of", "keys"}.
+-- @return For one key, returns (value, flags). For a list of keys,
+-- returns a { key1={data="data", flags=f }, key2=...} table.
+function Memcached:get(keys)
    return do_get(self, "get", keys, "^VALUE ([^ ]+) (%d+) (%d+)")
 end
 
 
-function M:gets(keys)
+---Get one or more keys and unique CAS IDs for each.
+-- @see get
+function Memcached:gets(keys)
    return do_get(self, "gets", keys, "^VALUE ([^ ]+) (%d+) (%d+) (%d+)")
 end
 
@@ -243,8 +267,8 @@ end
 --= Other commands =
 --==================
 
----Delete.
-function M:delete(key, noreply)
+---Delete a key.
+function Memcached:delete(key, noreply)
    local msg = fmt("delete %s%s\r\n",
                    key, noreply and " noreply" or "")
    local ok, err = self:send_recv(msg)
@@ -253,7 +277,7 @@ end
 
 
 ---Flush all keys.
-function M:flush_all()
+function Memcached:flush_all()
    return self:send_recv("flush_all\r\n")
 end
 
@@ -272,20 +296,20 @@ local function adjust_key(self, cmd, key, val, noreply)
 end
 
 
----Increment by.
-function M:incr(key, val, noreply)
+---Increment key by an integer.
+function Memcached:incr(key, val, noreply)
    return adjust_key(self, "incr", key, val, noreply)
 end
 
 
----Decrement by.
-function M:decr(key, val, noreply)
+---Decrement key by an integer.
+function Memcached:decr(key, val, noreply)
    return adjust_key(self, "decr", key, val, noreply)
 end
 
 
----Get stats.
-function M:stats()
+---Get a table with info about the memcached server.
+function Memcached:stats()
    local line, err = self:send_recv("stats\r\n")
    local s = {}
    while line ~= "END" do
@@ -300,12 +324,12 @@ end
 
 
 ---Get server version.
-function M:version()
+function Memcached:version()
    return self:send_recv("version\r\n")
 end
 
 
----Quit.
-function M:quit()
+---Close the connection to the server.
+function Memcached:quit()
    return self:send_recv("quit\r\n")
 end

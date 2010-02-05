@@ -86,6 +86,14 @@ function test_set_gets_multi_flags()
 end
 
 
+function test_set_get_large()
+   -- 95% of 1 mb worth of "a".
+   local big = ("a"):rep(0.95 * (1024 * 1024))
+   local ok, err = m:set("foo", big)
+   assert(big == m:get("foo"))
+end
+
+
 function test_set_gets()
    local ok, res = m:set("foo", "bar")
    assert(ok, res)
@@ -131,6 +139,8 @@ end
 function test_stats()
    local stats = m:stats()
    assert(stats, stats)
+   assert(stats.version, "No version field in stats table.")
+   --for k,v in pairs(stats) do print(k,v) end
 end
 
 
