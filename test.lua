@@ -1,12 +1,10 @@
 require "memcached"
 require "socket"
-require "lunit"
+require "lunatest"
 
+pcall(require, "luacov")
 
 local test_async = true
-
-module("test", lunit.testcase, package.seeall)
-
 
 local def_ct = 0
 if test_async then
@@ -25,7 +23,7 @@ end
 function teardown()
    m:quit()
    if m:is_async() then
-      print(string.format("-- Deferred %d times", def_ct))
+      --print(string.format("-- Deferred %d times", def_ct))
    end
    def_ct = 0
 end
@@ -237,3 +235,5 @@ function test_delete()
    m:delete("foo")
    assert_nil(m:get("foo"))
 end
+
+lunatest.run(true)
