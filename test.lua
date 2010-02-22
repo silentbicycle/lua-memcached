@@ -16,7 +16,7 @@ end
 function setup()
    m = assert(memcached.connect("localhost", 11211, dh),
               "Is the server running?")
-   assert(m:flush_all(), "Flush failed")
+   assert_true(m:flush_all(), "Flush failed")
 end
 
 
@@ -42,45 +42,45 @@ end
 
 function test_set()
    local ok, res = m:set("foo", "bar")
-   assert(ok, res)
-   assert(res == "STORED")
+   assert_true(ok, res)
+   assert_true(res == "STORED")
 end
 
 
 function test_set_get()
    local ok, res = m:set("foo", "bar")
-   assert(ok, res)
+   assert_true(ok, res)
    local val = m:get("foo")
-   assert(val == "bar")
+   assert_true(val == "bar")
 end
 
 
 function test_set_get_multi()
-   assert(m:set("foo", "bar"))
-   assert(m:set("bar", "baz"))
+   assert_true(m:set("foo", "bar"))
+   assert_true(m:set("bar", "baz"))
 
    local val = m:get {"foo", "bar" }
-   assert(val.foo)
-   assert(val.bar)
-   assert(val.foo.data == "bar")
-   assert(val.bar.data == "baz")
+   assert_true(val.foo)
+   assert_true(val.bar)
+   assert_true(val.foo.data == "bar")
+   assert_true(val.bar.data == "baz")
 end
 
 
 function test_set_gets_multi_flags()
-   assert(m:set("foo", "bar", nil, 31))
-   assert(m:set("bar", "baz", nil, 87))
+   assert_true(m:set("foo", "bar", nil, 31))
+   assert_true(m:set("bar", "baz", nil, 87))
 
    local val = m:gets {"foo", "bar" }
-   assert(val.foo)
-   assert(val.foo.data == "bar")
-   assert(val.foo.flags == 31)
-   assert(val.foo.cas)
+   assert_true(val.foo)
+   assert_true(val.foo.data == "bar")
+   assert_true(val.foo.flags == 31)
+   assert_true(val.foo.cas)
 
-   assert(val.bar)
-   assert(val.bar.data == "baz")
-   assert(val.bar.flags == 87)
-   assert(val.bar.cas)
+   assert_true(val.bar)
+   assert_true(val.bar.data == "baz")
+   assert_true(val.bar.flags == 87)
+   assert_true(val.bar.cas)
 end
 
 
@@ -88,24 +88,24 @@ function test_set_get_large()
    -- 95% of 1 mb worth of "a".
    local big = ("a"):rep(0.95 * (1024 * 1024))
    local ok, err = m:set("foo", big)
-   assert(big == m:get("foo"))
+   assert_true(big == m:get("foo"))
 end
 
 
 function test_set_gets()
    local ok, res = m:set("foo", "bar")
-   assert(ok, res)
+   assert_true(ok, res)
    local v, flags, cas = m:gets("foo")
-   assert(v == "bar", v)
+   assert_true(v == "bar", v)
 end
 
 
 function test_set_get_flag()
    local ok, res = m:set("foo", "bar", nil, 41)
-   assert(ok, res)
+   assert_true(ok, res)
    local v, flag = m:get("foo")
-   assert(v == "bar", v)
-   assert(flag == 41, flag)
+   assert_true(v == "bar", v)
+   assert_true(flag == 41, flag)
 end
 
 
@@ -122,9 +122,9 @@ end
 
 function test_set_get_expire()
    local ok, res = m:set("foo", "bar", 1)
-   assert(ok, res)
+   assert_true(ok, res)
    local v, flag = m:get("foo")
-   assert(v == "bar")
+   assert_true(v == "bar")
 
    print "\nSleeping for two seconds (key should expire)"
    sleep(2)
@@ -136,14 +136,14 @@ end
 
 function test_stats()
    local stats = m:stats()
-   assert(stats, stats)
-   assert(stats.version, "No version field in stats table.")
+   assert_true(stats, stats)
+   assert_true(stats.version, "No version field in stats table.")
    --for k,v in pairs(stats) do print(k,v) end
 end
 
 
 function test_incr()
-   assert(m:set("foo", 10))
+   assert_true(m:set("foo", 10))
    assert_equal("10", (m:get("foo")))
    assert_equal(51, m:incr("foo", 41))
    assert_equal("51", m:get("foo"))
@@ -151,9 +151,9 @@ end
 
 
 function test_incr_decr()
-   assert(m:set("foo", 10))
+   assert_true(m:set("foo", 10))
    assert_equal(110, m:incr("foo", 100))
-   assert(m:incr("foo", 15, true))
+   assert_true(m:incr("foo", 15, true))
    assert_equal(112, m:decr("foo", 13))
    local res, err = m:get("foo")
    assert_equal(112, tonumber(res))
@@ -162,7 +162,7 @@ end
 
 function test_add()
    local ok, res = m:add("foo", "bar")
-   assert(ok, res)
+   assert_true(ok, res)
    assert_equal("bar", m:get("foo"))
    ok, res = m:add("foo", "blah")
    assert_false(ok)
@@ -172,7 +172,7 @@ end
 
 function test_replace()
    local ok, res = m:add("foo", "bar")
-   assert(ok, res)
+   assert_true(ok, res)
    assert_equal("bar", m:get("foo"))
 
    ok, res = m:replace("bar", "blah")
@@ -180,14 +180,14 @@ function test_replace()
    assert_equal("NOT_STORED", res)
 
    ok, res = m:replace("foo", "blah")
-   assert(ok)
+   assert_true(ok)
    assert_equal("blah", m:get("foo"))
 end
 
 
 function test_append()
    local ok, res = m:add("foo", "bar")
-   assert(ok, res)
+   assert_true(ok, res)
    assert_equal("bar", m:get("foo"))
 
    ok, res = m:append("foo", "baz")
@@ -197,7 +197,7 @@ end
 
 function test_prepend()
    local ok, res = m:add("foo", "bar")
-   assert(ok, res)
+   assert_true(ok, res)
    assert_equal("bar", m:get("foo"))
 
    ok, res = m:prepend("foo", "foo")
@@ -210,7 +210,7 @@ function test_cas()
    local val, flags, cas = m:gets("foo")
 
    ok, res = m:cas("foo", "blaff", cas)
-   assert(ok, res)
+   assert_true(ok, res)
    assert_equal("STORED", res)
 end
 
