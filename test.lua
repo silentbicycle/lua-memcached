@@ -85,10 +85,10 @@ end
 
 
 function test_set_get_large()
-   -- 95% of 1 mb worth of "a".
-   local big = ("a"):rep(0.95 * (1024 * 1024))
+   local big = ("a"):rep(500 * 1024)    -- 500kb of 'a's.
    local ok, err = m:set("foo", big)
-   assert_true(big == m:get("foo"))
+   local v, err = m:get("foo")
+   assert_true(big == m:get("foo"), err)
 end
 
 
