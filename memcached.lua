@@ -24,8 +24,6 @@ OTHER DEALINGS IN THE SOFTWARE.
 --]]-------------------------------------------------------------------
 
 
-require "luacov"
-
 local DEBUG = false
 local function trace(...)
    if DEBUG then print(...) end
