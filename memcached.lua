@@ -38,7 +38,9 @@ local assert, print, setmetatable, type, tonumber, tostring =
 
 
 ---Non-blocking Lua client for memcached.
-module("memcached")
+-- module("memcached")
+local exports = {} -- module is dead CMH
+
 
 local fmt = string.format
 local Memcached = {}
@@ -49,7 +51,7 @@ local Memcached = {}
 -- @param port Defaults to 11211.
 -- @param defer_hook An optional function, called to defer, enabling
 -- non-blocking operation.
-function connect(host, port, defer_hook)
+exports.connect = function(host, port, defer_hook)
    host, port = host or "localhost", port or 11211
 
    local m = setmetatable({ _host=host, _port=port,
@@ -71,6 +73,7 @@ end
 
 
 local function init_con(self)
+   local err
    local sock = self._s
    if not sock then
       sock, err = Memcached:connect()
@@ -270,7 +273,7 @@ function Memcached:delete(key, noreply)
    local msg = fmt("delete %s%s\r\n",
                    key, noreply and " noreply" or "")
    local ok, err = self:send_recv(msg)
-   return res and res == "DELETED", res or false, err
+   return ok and ok == "DELETED", ok or false, err
 end
 
 
@@ -331,3 +334,5 @@ end
 function Memcached:quit()
    return self:send_recv("quit\r\n")
 end
+
+return exports
